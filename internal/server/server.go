@@ -21,7 +21,10 @@ func (s *Server) StartServer() error {
 	router := mux.NewRouter()
 
 	router.Path("/health").Methods("GET").HandlerFunc(s.httpHandlers.HandleCheckHealth)
-	router.Path("/lead").Methods("POST").HandlerFunc(s.httpHandlers.HandleCreateLead)
+	router.Path("/leads").Methods("POST").HandlerFunc(s.httpHandlers.HandleCreateLead)
+	router.Path("/leads").Methods("GET").Queries("id", "{id}").HandlerFunc(s.httpHandlers.HandleGetLead)
+	router.Path("/leads").Methods("GET").HandlerFunc(s.httpHandlers.HandleGetAllLeads)
+	router.Path("/leads").Methods("DELETE").Queries("id", "{id}").HandlerFunc(s.httpHandlers.HandleDeleteLead)
 
 	return http.ListenAndServe(":8080", router)
 }

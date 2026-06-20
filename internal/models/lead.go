@@ -2,12 +2,15 @@ package models
 
 import (
 	"regexp"
+	"time"
 	"unicode/utf8"
 )
 
 type Lead struct {
-	Name  string `json:"name"`
-	Phone string `json:"phone"`
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	Phone     string    `json:"phone"`
+	CreatedAt time.Time `json:"time"`
 }
 
 var (
@@ -17,8 +20,9 @@ var (
 
 func CreateLead(name string, phone string) Lead {
 	return Lead{
-		Name:  name,
-		Phone: phone,
+		Name:      name,
+		Phone:     phone,
+		CreatedAt: time.Now(),
 	}
 }
 
