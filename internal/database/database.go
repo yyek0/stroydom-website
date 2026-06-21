@@ -10,7 +10,7 @@ import (
 
 type LeadStorage interface {
 	Ping(ctx context.Context) error
-	Create(ctx context.Context, lead models.Lead) error
+	Create(ctx context.Context, lead models.Lead) (int, error)
 	GetAll(ctx context.Context) ([]models.Lead, error)
 	Get(ctx context.Context, id int) (models.Lead, error)
 	Delete(ctx context.Context, id int) error
@@ -43,7 +43,6 @@ func (db *PostgresDB) Init(ctx context.Context) error {
 
 	_, err := db.Pool.Exec(ctx, sqlQuery)
 	if err != nil {
-		// тут можно закинуть log.Println, если хочется видеть ошибки
 		return err
 	}
 
@@ -52,25 +51,24 @@ func (db *PostgresDB) Init(ctx context.Context) error {
 
 func (db *PostgresDB) Ping(ctx context.Context) error {
 	if err := db.Pool.Ping(ctx); err != nil {
-		// log it
 		return err
 	}
 	return nil
 }
 
-func (db *PostgresDB) Create(ctx context.Context, lead models.Lead) error {
+func (db *PostgresDB) Create(ctx context.Context, lead models.Lead) (int, error) {
 	sqlQuery := `
 		INSERT INTO leads (name, phone, created_at) 
-		VALUES ($1, $2, $3)
+		VALUES ($1, $2, $3) RETURNING id
 	`
 
-	_, err := db.Pool.Exec(ctx, sqlQuery, lead.Name, lead.Phone, lead.CreatedAt)
+	var id int
+	err := db.Pool.QueryRow(ctx, sqlQuery, lead.Name, lead.Phone, lead.CreatedAt).Scan(&id)
 	if err != nil {
-		// log it
-		return err
+		return 0, err
 	}
 
-	return nil
+	return id, nil
 }
 
 func (db *PostgresDB) GetAll(ctx context.Context) ([]models.Lead, error) {
@@ -83,7 +81,6 @@ func (db *PostgresDB) GetAll(ctx context.Context) ([]models.Lead, error) {
 	rows, err := db.Pool.Query(ctx, sqlQuery)
 
 	if err != nil {
-		// log it
 		return leads, err
 	}
 
@@ -119,11 +116,10 @@ func (db *PostgresDB) GetAll(ctx context.Context) ([]models.Lead, error) {
 
 func (db *PostgresDB) Delete(ctx context.Context, id int) error {
 	sqlQuery := `
-		DELETE FROM leads WHERE id = $1
+		DELETE FROM leads WHERE id = $1 
 	`
 
 	if _, err := db.Pool.Exec(ctx, sqlQuery, id); err != nil {
-		// log it
 		return err
 	}
 

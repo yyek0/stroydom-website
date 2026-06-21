@@ -15,3 +15,6 @@ bin/
 .idea/
 .vscode/
 .DS_Store
+
+# Логи
+logs/

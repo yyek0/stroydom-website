@@ -2,45 +2,39 @@ package main
 
 import (
 	"context"
+	"log"
 	"os"
 
-	"github.com/joho/godotenv" // <-- вот эта строка нужна
+	"github.com/joho/godotenv"
+	"go.uber.org/zap"
 
 	"github.com/yyek0/stroydom-website/internal/database"
 	"github.com/yyek0/stroydom-website/internal/handler"
+	"github.com/yyek0/stroydom-website/internal/logger"
 	"github.com/yyek0/stroydom-website/internal/server"
 )
 
 func main() {
-	ctx := context.Background()
-
-	// postgresql://username:password@host:port/database_name
-
 	if err := godotenv.Load(); err != nil {
-		panic(err)
+		log.Println("Файл .env не найден")
 	}
 
-	// 2. Достаем строку подключения
+	// Инициализируем наш кастомный логгер
+	appLogger := logger.InitLogger()
+	defer appLogger.Sync() // Сбрасываем буферы при выключении
+
 	connString := os.Getenv("DB_CONN")
-	if connString == "" {
-		panic("conn string is empty")
-	}
-
-	PostgresDB, err := database.NewDatabase(ctx, "postgres://postgres:1@localhost:5432/postgres")
+	db, err := database.NewDatabase(context.Background(), connString)
 	if err != nil {
-		panic(err)
+		appLogger.Fatal("Не удалось подключиться к БД", zap.Error(err))
 	}
 
-	if err := PostgresDB.Init(ctx); err != nil {
-		panic(err)
+	// Прокидываем логгер в хендлеры
+	myHandlers := handler.NewHandler(db, appLogger)
+	myServer := server.NewServer(myHandlers)
+
+	appLogger.Info("Сервер успешно запущен")
+	if err := myServer.StartServer(); err != nil {
+		appLogger.Fatal("Сервер упал", zap.Error(err))
 	}
-
-	handlers := handler.NewHandler(PostgresDB)
-
-	serv := server.NewServer(handlers)
-
-	if err := serv.StartServer(); err != nil {
-		panic(err)
-	}
-
 }
