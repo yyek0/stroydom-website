@@ -1,9 +1,12 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"os"
+	"os/signal"
 	"runtime/debug"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -88,11 +91,41 @@ func (s *Server) StartServer() error {
 	router.Use(s.CORSMiddleware)
 	router.Use(s.LoggingMiddleware)
 
-	router.Path("/health").Methods("GET").HandlerFunc(s.httpHandlers.HandleCheckHealth)
-	router.Path("/leads").Methods("POST").HandlerFunc(s.httpHandlers.HandleCreateLead)
-	router.Path("/leads").Methods("GET").Queries("id", "{id}").HandlerFunc(s.httpHandlers.HandleGetLead)
-	router.Path("/leads").Methods("GET").HandlerFunc(s.httpHandlers.HandleGetAllLeads)
-	router.Path("/leads").Methods("DELETE").Queries("id", "{id}").HandlerFunc(s.httpHandlers.HandleDeleteLead)
+	router.Path("/api/health").Methods("GET").HandlerFunc(s.httpHandlers.HandleCheckHealth)
+	router.Path("/api/leads").Methods("POST").HandlerFunc(s.httpHandlers.HandleCreateLead)
+	router.Path("/api/leads").Methods("GET").Queries("id", "{id}").HandlerFunc(s.httpHandlers.HandleGetLead)
+	router.Path("/api/leads").Methods("GET").HandlerFunc(s.httpHandlers.HandleGetAllLeads)
+	router.Path("/api/leads").Methods("DELETE").Queries("id", "{id}").HandlerFunc(s.httpHandlers.HandleDeleteLead)
 
-	return http.ListenAndServe(os.Getenv("PORT"), router)
+	srv := &http.Server{
+		Addr:    os.Getenv("PORT"),
+		Handler: router,
+	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			s.httpHandlers.Logger.Fatal("Критическая ошибка при запуске сервера", zap.Error(err))
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+
+	signal.Notify(quit, syscall.SIGTERM, syscall.SIGINT)
+
+	sig := <-quit
+
+	s.httpHandlers.Logger.Info("Получен сигнал остановки сервера. Инициирован Graceful Shutdown",
+		zap.String("signal", sig.String()),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		s.httpHandlers.Logger.Error("Сервер завершил работу с ошибкой таймаута", zap.Error(err))
+		return err
+	}
+
+	s.httpHandlers.Logger.Info("Сервер успешно и безопасно остановлен")
+	return nil
 }
