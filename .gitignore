@@ -1,0 +1,20 @@
+# Секреты
+.env
+
+# Бинарники (результаты сборки Go)
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+bin/
+
+# IDE и системные файлы
+.idea/
+.vscode/
+.DS_Store
+
+# Логи
+logs/
