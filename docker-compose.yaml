@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # --- СЕРВИС БАЗЫ ДАННЫХ ---
+  db:
+    image: postgres:15-alpine
+    container_name: stroydom_db
+    # Прокидываем порты: порт_на_твоем_компьютере : порт_внутри_контейнера
+    # Это нужно, чтобы ты мог подключиться к базе через DBeaver/DataGrip по localhost:5432
+    ports:
+      - "5432:5432"
+    # Переменные окружения для инициализации Postgres
+    environment:
+      POSTGRES_USER: stroydom_user
+      POSTGRES_PASSWORD: stroydom_secure_password
+      POSTGRES_DB: stroydom_db
+    # Тома (Volumes) нужны, чтобы данные в базе не удалялись при перезапуске контейнеров
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Проверяем, что база готова принимать подключения, прежде чем пустить к ней сервер
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stroydom_user -d stroydom_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- СЕРВИС НАШЕГО GO-ПРИЛОЖЕНИЯ ---
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stroydom_backend
+    # Прокидываем порт сервера наружу, чтобы фронтенд или curl могли слать запросы
+    ports:
+      - "8080:8080"
+    # Переменные окружения, которые прочитает наш Go-код через os.Getenv
+    environment:
+      - PORT=:8080
+      # КРИТИЧЕСКИ ВАЖНО: вместо localhost мы пишем "db" (имя сервиса базы данных выше)
+      - DATABASE_URL=postgres://stroydom_user:stroydom_secure_password@db:5432/stroydom_db?sslmode=disable
+    # Говорим Докеру не запускать сервер, пока база данных успешно не пройдет проверку (healthcheck)
+    depends_on:
+      db:
+        condition: service_healthy
+
+# Объявляем именованный том для сохранения данных базы
+volumes:
+  postgres_data:

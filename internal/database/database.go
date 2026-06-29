@@ -2,7 +2,13 @@ package database
 
 import (
 	"context"
+	"fmt"
 	"time"
+
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+
+	"github.com/golang-migrate/migrate/v4"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/yyek0/stroydom-website/internal/models"
@@ -20,7 +26,33 @@ type PostgresDB struct {
 	Pool *pgxpool.Pool
 }
 
+func runMigrations(connString string) error {
+	// Указываем, где лежат файлы (в папке migrations) и куда подключаться
+	m, err := migrate.New(
+		"file://migrations",
+		connString,
+	)
+	if err != nil {
+		return err
+	}
+
+	// Пытаемся накатить все новые миграции (метод Up)
+	err = m.Up()
+
+	// Если мы запускаем сервер, а новых миграций нет — это нормальная ситуация,
+	// библиотека вернет ErrNoChange. Игнорируем эту "ошибку".
+	if err != nil && err != migrate.ErrNoChange {
+		return err
+	}
+
+	return nil
+}
+
 func NewDatabase(ctx context.Context, connString string) (*PostgresDB, error) {
+	if err := runMigrations(connString); err != nil {
+		return nil, fmt.Errorf("ошибка при накатывании миграций: %w", err)
+	}
+
 	pool, err := pgxpool.New(ctx, connString)
 	if err != nil {
 		return nil, err
@@ -29,24 +61,6 @@ func NewDatabase(ctx context.Context, connString string) (*PostgresDB, error) {
 	return &PostgresDB{
 		Pool: pool,
 	}, nil
-}
-
-func (db *PostgresDB) Init(ctx context.Context) error {
-	sqlQuery := `
-        CREATE TABLE IF NOT EXISTS leads (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(200),
-            phone VARCHAR(20),
-            created_at TIMESTAMP
-        );
-    `
-
-	_, err := db.Pool.Exec(ctx, sqlQuery)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (db *PostgresDB) Ping(ctx context.Context) error {
