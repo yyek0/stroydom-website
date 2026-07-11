@@ -27,7 +27,7 @@ services:
   # --- СЕРВИС НАШЕГО GO-ПРИЛОЖЕНИЯ ---
   app:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: stroydom_backend
     # Прокидываем порт сервера наружу, чтобы фронтенд или curl могли слать запросы
